@@ -1,0 +1,17 @@
+services:
+  boot:
+    image: secure-boot:1.0
+    environment:
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres?currentSchema=secure
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: "root"
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d:ro

@@ -1,0 +1,10 @@
+nginx_config:
+  http_server_configuration_snippet: |
+      location /bundles/ {
+          root /var;
+      }
+
+deployment:
+  etcd:
+    host:
+      - http://etcd:2397

@@ -6,6 +6,7 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.http.MediaType
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.security.authentication.InsufficientAuthenticationException
@@ -13,7 +14,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter
-import java.util.*
+import org.springframework.web.client.RestClient
 
 @Entity
 internal data class Account(
@@ -26,22 +27,22 @@ internal interface AccountRepository : JpaRepository<Account, String> {
     fun findByPassword(token: String): Account?
 }
 
-internal class TokenAuthenticationManager(
+internal class OpaAuthenticationManager(
     private val accountRepo: AccountRepository,
-    private val employeeRepo: EmployeeRepository
+    private val restClient: RestClient
 ) : AuthenticationManager {
 
     override fun authenticate(authentication: Authentication): Authentication {
         val token = authentication.credentials as String? ?: throw BadCredentialsException("No token passed")
         val account = accountRepo.findByPassword(token) ?: throw BadCredentialsException("Invalid token")
         val path = authentication.details as List<String>
-        val accountId = account.id
-        val segment = path.last()
-        if (segment == accountId) return authentication.withPrincipal(accountId)
-        val employee = employeeRepo.findByIdOrNull(segment)
-        val managerUserName = employee?.manager?.userName
-        if (managerUserName != null && managerUserName == accountId) return authentication.withPrincipal(accountId)
-        throw InsufficientAuthenticationException("Incorrect token")
+        val decision = restClient.post()
+            .accept(MediaType.APPLICATION_JSON)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(OpaInput(DataInput(account.id, path)))
+            .exchange { _, resp -> resp.bodyTo(DecisionOutput::class.java) ?: DecisionOutput(ResultOutput(false))  }
+        if (decision.result.allow) return authentication.withPrincipal(account.id)
+        else throw InsufficientAuthenticationException("OPA disallow")
     }
 
     private fun Authentication.withPrincipal(principal: String): Authentication =
@@ -54,7 +55,7 @@ internal class TokenAuthenticationFilter(authManager: AuthenticationManager) :
 
     override fun attemptAuthentication(req: HttpServletRequest, resp: HttpServletResponse): Authentication {
         val header = req.getHeader("Authorization")
-        val path = req.servletPath.split('/')
+        val path = req.servletPath.split('/').filter { it.isNotBlank() }
         val token = KeyToken(header, path)
         return authenticationManager.authenticate(token)
     }
@@ -94,3 +95,20 @@ private class KeyTokenWithPrincipal(private val principal: String, private val t
     Authentication by token {
     override fun getPrincipal() = principal
 }
+
+private data class OpaInput(
+    val input: DataInput
+)
+
+private data class DataInput(
+    val user: String,
+    val path: List<String>,
+)
+
+private data class DecisionOutput(
+    val result: ResultOutput
+)
+
+private data class ResultOutput(
+    val allow: Boolean,
+)

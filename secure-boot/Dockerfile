@@ -1,4 +1,4 @@
-#docker build -t secure-boot:1.1 .
+#docker build -t secure-boot:1.2 .
 FROM eclipse-temurin:21-jdk AS build
 
 COPY .mvn .mvn
@@ -10,7 +10,6 @@ RUN --mount=type=cache,target=/root/.m2,rw ./mvnw package -DskipTests
 
 FROM eclipse-temurin:21-jre
 
-COPY --from=build target/secure-boot-1.1.jar secure-boot.jar
+COPY --from=build target/secure-boot-1.2.jar secure-boot.jar
 
-EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "secure-boot.jar"]

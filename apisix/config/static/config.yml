@@ -8,3 +8,10 @@ deployment:
   etcd:
     host:
       - http://etcd:2397
+  admin:
+    allow_admin:
+      - 0.0.0.0/0
+
+plugins:
+  - key-auth                       # priority: 2500
+  - proxy-rewrite                  # priority: 1008

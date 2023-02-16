@@ -4,6 +4,8 @@ services:
     volumes:
       - ./apisix/config/static/config.yml:/usr/local/apisix/conf/config.yaml:ro
       - bundles-data:/var/bundles:ro
+    ports:
+      - "9080:9080"
     depends_on:
       - etcd
   etcd:
@@ -13,6 +15,27 @@ services:
       ALLOW_NONE_AUTHENTICATION: yes
       ETCD_ADVERTISE_CLIENT_URLS: http://0.0.0.0:2397
       ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2397
+  apisix-config:
+    image: curlimages/curl:8.7.1
+    command:
+        - "sh"
+        - "-c"
+        - "/var/apisix/apisix.sh"
+    volumes:
+      - ./apisix/config/dynamic:/var/apisix:ro
+    depends_on:
+      - apisix
+    restart: on-failure
+  consumers:
+    image: consumers:1.0
+    environment:
+      APISIX_ADMIN_API_KEY: edd1c9f034335f136f87ad84b625c8f1
+      APISIX_ADMIN_URL: http://apisix:9180
+      DATABASE_HOST: postgres
+      DATABASE_PASSWORD: root
+    depends_on:
+      - postgres
+      - apisix
   opa:
     image: openpolicyagent/opa:0.63.0
     command:
@@ -35,18 +58,20 @@ services:
       - ./policy:/var/policy:ro
       - bundles-data:/var/bundles:rw
   boot:
-    image: secure-boot:1.1
+    image: secure-boot:1.2
     environment:
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: root
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/postgres?currentSchema=secure
       APP_OPA_ENDPOINT: http://opa:8181/v1/data/ch/frankel/blog/secureboot
-    ports:
-      - "8080:8080"
     depends_on:
       - postgres
   postgres:
     image: postgres:15-alpine
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
     environment:
       POSTGRES_PASSWORD: "root"
     volumes:
